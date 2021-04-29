@@ -1,7 +1,5 @@
 # Text Mining Project
 
-**TO DO: update links to View Notebooks**
-
 ## Description
 
 I am curious about artificial intelligence (AI) and have been a subscriber of the WSJ Pro Artificial Intelligence daily email newsletter.  At times, I do not always have a chance to read the articles.  To catch up, I used text mining techniques to do a kind of automated "literature review" of about eight months of back issues.  Ultimately, I want to use the articles to look at the applications of AI, its business value, companies/industries where used, and whether the projects were successful or not. 
@@ -16,9 +14,9 @@ The WSJ newsletter is a useful starting point given that it targets *“those wh
 
 - Code
   - View Notebooks (with Jupyter nbviewer)
-    - [Assignment 1](https://nbviewer.jupyter.org/) - Web scrapping to extract title of articles from the daily newsletter.  Basic term frequency analysis. Uses count vectorizer to create a bag of word and experiments with settings to fine-tune extracted terms.
-    - [Assignment 2](https://nbviewer.jupyter.org/) - Analyzes text in highlighted quotes in newsletters.  Explores preprocessing methods to refine resulting terms such as converting words to root form, removing stop words and expanding contractions.  Explores use of three different dictionaries for sentiment analysis.
-    - [Assignment 3](https://nbviewer.jupyter.org/) - Additional preprocessing of terms in article titles and analyzes the frequency of terms to understand newsletter topics.  Expands terms available in final sentiment dictionary.  Expands logic of sentiment scoring algorithm and analyzes sentiment of quotes.
+    - [Assignment 1](https://nbviewer.jupyter.org/github/saralienau/grad-projects/blob/main/projects/project-text-mining/code-python/1-Homework1.ipynb) - Web scrapping to extract title of articles from the daily newsletter.  Basic term frequency analysis. Uses count vectorizer to create a bag of word and experiments with settings to fine-tune extracted terms.
+    - [Assignment 2]((https://nbviewer.jupyter.org/github/saralienau/grad-projects/blob/main/projects/project-text-mining/code-python/2-Homework2.ipynb) - Analyzes text in highlighted quotes in newsletters.  Explores preprocessing methods to refine resulting terms such as converting words to root form, removing stop words and expanding contractions.  Explores use of three different dictionaries for sentiment analysis.
+    - [Assignment 3]((https://nbviewer.jupyter.org/github/saralienau/grad-projects/blob/main/projects/project-text-mining/code-python/3-Project.ipynb) - Additional preprocessing of terms in article titles and analyzes the frequency of terms to understand newsletter topics.  Expands terms available in final sentiment dictionary.  Expands logic of sentiment scoring algorithm and analyzes sentiment of quotes.
   - [Jupyter Notebooks and Data](code-python)
 
 

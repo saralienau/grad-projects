@@ -18,7 +18,7 @@ The assignment involved:
 
 A single notebook with report sections discussing the business problem, data source, EDA, and code sections fitting models with notes on choices made and discussion of intermediate and final results.
 
-- [View Notebook (with Jupyter nbviewer)](https://nbviewer.jupyter.org/github/saralienau/grad-projects/blob/492a872036b4dcdcd149e467045c33fefe9009f4/projects/project-classification/code-python/Project.ipynb) 
+- [View Notebook (with Jupyter nbviewer)](https://nbviewer.jupyter.org/github/saralienau/grad-projects/blob/main/projects/project-classification/code-python/Project.ipynb) 
 - [Jupyter Notebook and Data](code-python)
 
 
