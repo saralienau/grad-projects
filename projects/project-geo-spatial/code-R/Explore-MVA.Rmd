@@ -1,0 +1,276 @@
+---
+title: "Explore KC 2016 Market Value Analysis (MVA)"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# to knit to  html file
+# ------------------------------------
+# output: html_document
+knitr::opts_chunk$set(echo = TRUE)
+tmap_interactive_viewing_mode = "view"
+
+# # # to knit for GitHub repo
+# # ------------------------------------
+# #output: github_document
+# 
+# knitr::opts_chunk$set(
+#   echo = TRUE,
+#   fig.path = "md-figures/explore-mva-"
+#   )
+# tmap_interactive_viewing_mode = "plot"
+```
+
+
+```{r}
+library(sf)
+library(tmap)
+library(tidyverse)
+```
+
+## Load Data
+```{r}
+# read shape file for
+kcmo_mva_sf <- st_read("Data/2016 Market Value Analysis (MVA)/geo_export_8a3f2884-9896-4c60-ba20-c985177b689a.shp")
+
+# CRS 4326 - unprojected (geo with lon/lat)
+```
+```{r}
+colnames(kcmo_mva_sf)
+```
+
+```{r}
+head(kcmo_mva_sf)
+```
+
+# Explore Interesting Variables with Choropleth Maps
+
+## MVA Category
+```{r}
+#tmap_mode("view")
+tm_shape(kcmo_mva_sf) +
+  tm_polygons(col="clstr_fina", alpha=0.5)
+#tmap_mode("plot")
+```
+
+What are the values from MVA Category?  Some label are difficult to read on the map.
+
+```{r}
+unique(kcmo_mva_sf$clstr_fina)
+```
+
+### Zoom In on Different MVA Cateogories
+
+For example, Top Categories are A, B, C.  Bottom Categories are G, H, I.
+
+```{r}
+tmap_mode(tmap_interactive_viewing_mode)
+
+  kcmo_mva_sf %>% 
+    filter(clstr_fina %in% c("A", "B", "C")) %>% 
+    
+    tm_shape(bbox=kcmo_mva_sf) +
+      tm_polygons(col="clstr_fina", alpha=0.5)
+
+tmap_mode("plot")
+```
+
+## Median sales price 
+... of residential properties sold between 2014 and 2016q2
+
+```{r}
+# summary(kcmo_mva_sf$mspn_lb_14)
+   # Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   #    0   32500   99343  118454  170226  862500 
+
+tm_shape(kcmo_mva_sf) +
+  tm_polygons(col="mspn_lb_14", title="Median Sales Price", palette="GnBu",
+              n=10,
+              legend.hist=TRUE) +
+  tm_layout(legend.outside=TRUE)
+```
+
+#### Variation sales price 
+... of residential properties sold between 2014 and 2016q2
+
+How is percent represented? 0.5 would typically be 50%. Most under 50% variation in sales price, but also 1.0, 1.5. 2.0 (variation = 2x 200% ??)
+
+*Hmmm, there is a wide range in variation in the sales price of residential properties.*
+
+```{r}
+# summary(kcmo_mva_sf$vspn_lb_14)
+   #   Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
+   # 0.0000  0.3030  0.4505  0.5599  0.7351  2.2277
+
+tm_shape(kcmo_mva_sf) +
+  tm_polygons(col="vspn_lb_14", title="Var. Sales Price (%)", palette="GnBu",
+              #n=10,
+              legend.hist=TRUE) +
+  tm_layout(legend.outside=TRUE)
+```
+
+## Percentage of residential parcels with a new construction permit
+... issued between 2014 and 2015
+
+This variable seems to be a good indication of areas of growth, new development ...
+
+The vast majority of KC has little if any new construction (3rd quartile < 0.2% (2/10th of 1%)).  The map below filters out block groups with < 1% so it is easier to see areas where there is new construction (1% to max. of almost 50%) 
+
+```{r}
+# summary(kcmo_mva_sf$pncnst_121)
+  #     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+  # 0.000000 0.000000 0.000000 0.014647 0.002604 0.497207 
+
+kcmo_mva_sf %>% 
+   filter(pncnst_121 >= 0.01) %>%                    # > 1% of parcels
+  
+tm_shape(bbox=kcmo_mva_sf) +
+  tm_polygons(col="pncnst_121", title="% New Const. Permit", palette="GnBu",
+              #n=10,
+              legend.hist=TRUE) +
+  tm_layout(legend.outside=TRUE)
+```
+
+## Percent of residential properties with permits for new construction or improvements
+... valued over $1k, excluding demolitions
+
+Two areas > 1.0 (or > 100% of residential properties). Data error?
+
+Below displays block groups in the top quartile - where > 6.78% of residential properties have permits for new construction or improvement over $1K.
+
+```{r}
+# summary(kcmo_mva_sf$pperm_1_k_)
+  #    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+  # 0.00000 0.02558 0.03761 0.06824 0.06775 1.57143
+
+boxplot(kcmo_mva_sf$pperm_1_k_, horizontal=TRUE)
+
+kcmo_mva_sf %>% 
+   filter(pperm_1_k_ > 0.06775) %>%                    # Top Quartile
+tm_shape(bbox=kcmo_mva_sf) +
+  tm_polygons(col="pperm_1_k_", title="% $1k+ Improvement", palette="GnBu",
+              n=10,
+              legend.hist=TRUE) +
+  tm_layout(legend.outside = TRUE)
+```
+
+## Households per acre
+
+High density areas are Downtown, Crown Center (?Westport), the Plaza.
+
+The map below displays the top quartile - block groups with the highest households per acre.  For reference, an acre is about 3/4 of a football field.  The 3rd quartile is 6.7 hh/acre, so 75% of the census block groups are < 7 households per acre.
+
+```{r}
+# summary(kcmo_mva_sf$hhdense)
+  #  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+  # 0.000   2.882   4.435   7.959   6.784 182.855 
+
+tmap_mode(tmap_interactive_viewing_mode)
+
+  kcmo_mva_sf %>% 
+    filter(hhdense > 7) %>%                    # most dense 25%
+  tm_shape(bbox=kcmo_mva_sf) +
+    tm_polygons(col="hhdense", title="HH / acre", palette="GnBu",
+                n=10,
+                alpha=0.5,
+                legend.hist=TRUE) +
+    tm_layout(legend.outside = TRUE)
+  
+tmap_mode("plot")
+```
+
+## Percent of Households that are owner occupied
+
+So ... Own vs. Rent??
+
+Interesting, this is the first variable with a more even distribution throughout the city (vs. highly skewed)
+
+```{r}
+#summary(kcmo_mva_sf$phuoo)
+ #   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+ # 0.0000  0.3516  0.5658  0.5533  0.7932  1.0000 
+
+tm_shape(kcmo_mva_sf) +
+  tm_polygons(col="phuoo", title="% Owner Occupied", palette="GnBu",
+              #n=10,
+              legend.hist=TRUE) +
+  tm_layout(legend.outside = TRUE)
+```
+
+## Percent of residential properties with maintenance violations issued in 2014 and 2015
+
+Might want to target areas with low violation < 75%
+
+The map below displays the top quartile - block groups with the highest % of maintenance violations (> 19%).
+
+```{r}
+#summary(kcmo_mva_sf$pmviol_141)
+  #    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+  # 0.00000 0.05556 0.12230 0.13461 0.19559 0.53778 
+
+kcmo_mva_sf %>% 
+  filter(pmviol_141 > 0.196) %>%                    # top 25%
+tm_shape(bbox=kcmo_mva_sf) +
+  tm_polygons(col="pmviol_141", title="% Maintenance Violation", palette="GnBu",
+              #n=10,
+              legend.hist=TRUE) +
+  tm_layout(legend.outside = TRUE)
+```
+
+## Percent of residential properties on the vacant property registry,
+... owned by a bank, with a vacant property violation, on the city's dangerous buildings list, or with a demolition permit issued in 2014 or 2015*
+
+What's up with northern most block group?  It had a lot of new construction - so is a lot still owned by a bank, vacant (not sold to homeowner yet), or had some kind of demolition permit prior to new construction??
+
+```{r}
+#summary(kcmo_mva_sf$pvac_any_1)
+  #     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+  # 0.000000 0.008602 0.029963 0.071619 0.093313 0.553684 
+
+kcmo_mva_sf %>%
+   filter(pvac_any_1 > 0.10) %>%                    # > 10%
+tm_shape(bbox=kcmo_mva_sf) +
+  tm_polygons(col="pvac_any_1", title="% Vacant", palette="GnBu",
+              #n=10,
+              legend.hist=TRUE) +
+  tm_layout(legend.outside = TRUE)
+```
+
+
+----------
+# Explore Data Structure
+
+Documentation mentions "split" blocks.  The MVA was generally at the level of Census Block Groups but a couple groups were split.
+```{r}
+nrow(kcmo_mva_sf)
+
+# Yes, geo id is unique - split block groups have letter appended to the end.
+nrow(kcmo_mva_sf %>% 
+  group_by(geo_id) %>% 
+  count() %>% 
+  filter(n == 1))
+```
+
+FYI: Where are the split blocks?
+
+```{r}
+kcmo_mva_sf %>% 
+  filter(split == 1) %>% 
+
+tm_shape(bbox=kcmo_mva_sf) +
+  tm_polygons(col="pink") +
+  
+  tm_shape(kcmo_mva_sf) +
+    tm_borders()
+```
+
+
+
+
+
+
+
+
+
+
+

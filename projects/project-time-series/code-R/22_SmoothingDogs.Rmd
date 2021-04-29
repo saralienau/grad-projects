@@ -1,0 +1,507 @@
+---
+title: "Smoothing Models for Dogs"
+output: 
+  github_document:
+    toc: true
+    toc_depth: 3
+  html_document:
+    keep_md: false
+    toc: true
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  fig.path = "md-images/dogs-smo-"
+)
+```
+
+# Setup
+
+## Load Packages
+
+```{r}
+library(tidyverse)
+
+library(ggplot2)
+library(forecast)
+library(smooth)
+
+theme_set(theme_bw())
+```
+
+## Load Data & Create Time Series
+
+* Original data ranged from Oct 2013 to Aug 2020
+* Subset data to drop months after Feb 2020 (impacted by COVID-19 lockdowns).  This leaves 77 months (or 6 years and 5 months) of animal intake from Oct 2013 to Feb 2020 
+* Create time-series object with data for only the intake of **dogs**
+
+```{r}
+DATA_ORIGINAL <- read.csv("data/Austin_AC_Monthly_Strays.csv", stringsAsFactors = FALSE)
+# str(DATA_ORIGINAL)
+
+DATA_SUBSET <- subset(DATA_ORIGINAL, IN_YRMO <= "2020-02")
+
+TIME_SERIES <- ts(data      = DATA_SUBSET[,c("Dog")],    # only include Dogs 
+                  start     = c(2013, 10), 
+                  end       = c(2020,  2), 
+                  frequency = 12)
+```
+
+Plot the intake of stray dogs
+
+```{r}
+label_title = "Dog Stray Intake Oct 2013 - Feb 2020"
+label_xaxis = "Months"
+label_yaxis = "Monthly Dog Intake"
+
+autoplot(TIME_SERIES) +
+  ggtitle(label_title) +
+  xlab(label_xaxis) + ylab(label_yaxis) +
+  theme(legend.position = "bottom") +
+  guides(colour=guide_legend(title=""))
+```
+
+## Partition Data
+
+* Training - 65 months or 5 years and 5 months (Oct 2013 to Feb 2019)
+* Test     - last 12 months (Mar 2019 to Feb 2020)
+
+```{r}
+TS_TRNG_SET <- window(TIME_SERIES, 
+                      start=c(2013, 10), 
+                      end  =c(2019,  2))
+
+TS_TEST_SET <- window(TIME_SERIES,
+                      start=c(2019,  3),
+                      end  =c(2020,  2))
+
+N_TEST_SET <- length(TS_TEST_SET)
+
+TS_TEST_SET
+```
+
+# Smoothing Models
+
+## Simple Moving Average
+
+Use `smooth::sma()` 
+
+**Fit Model**
+
+```{r}
+# order = NULL to select optimal window for moving average.
+
+MODEL_SMA <- sma(TS_TRNG_SET, order=NULL, holdout=FALSE, silent="none")
+```
+
+```{r}
+summary(MODEL_SMA)
+```
+
+Optimal width/window is last 14 observations (as noted in title of chart output).
+
+**Forecast/Predict Values for Test Set**
+
+```{r}
+FC_SMA <- forecast(MODEL_SMA, h=N_TEST_SET)
+FC_SMA$mean
+```
+
+Plot
+
+* the full time series of dog intake (includes both the training and test data)
+* the fitted values
+* the forecast for the next 12 months
+
+```{r}
+autoplot(TIME_SERIES, color="darkgray") +
+  ggtitle("Dog: Simple Moving Average (14)") +  
+  xlab(label_xaxis) + ylab(label_yaxis) +
+  theme(legend.position = "bottom") +
+  guides(colour=guide_legend(title="")) +
+
+  # fitted values    
+  autolayer(fitted(MODEL_SMA), series="Simple Moving Average", lwd=0.5) +
+  
+  # forecasted values  
+  autolayer(FC_SMA,            series="Simple Moving Average", PI=FALSE, lwd=1, lty=1)
+```
+
+**Assess Accuracy of Model**
+
+```{r eval=FALSE, include=FALSE}
+# forecast::accuracy(FC_SMA, TS_TEST_SET)
+
+# didn't work on FC_SMA object
+```
+
+Manually Calculate
+
+```{r}
+ACTUAL    <- as.numeric(TS_TEST_SET)
+PREDICTED <- as.numeric(FC_SMA$forecast)
+
+MODEL_ACCURACY <- data.frame(
+  Model    = "Simple Moving Average",
+  RMSE     = Metrics::rmse(ACTUAL, PREDICTED),
+  MAE      = Metrics::mae( ACTUAL, PREDICTED),
+  MAPE     = Metrics::mape(ACTUAL, PREDICTED),
+  AdjRsqrd = NA
+)
+
+MODEL_COMPARISON <- MODEL_ACCURACY
+MODEL_COMPARISON
+```
+
+On average, forecast off by 57 dogs per month (or about 7.5%)
+
+## Simple Exponential Smoothing (Level)
+
+This approach is inappropriate since the time series has trend and seasonality, but walk through the steps for experience.
+
+Also, recall SES has a flat forecast beyond the one-step ahead.
+
+Use `ses()` from `forecast` pacakge where ses, holt and hw are simply convenient wrapper functions for forecast(ets(...)).
+
+**Fit Model & Forecast in One-Step**
+
+```{r}
+FC_SES <- forecast::ses(TS_TRNG_SET, h=N_TEST_SET)
+
+FC_SES$model
+```
+
+```{r}
+autoplot(TIME_SERIES, color="darkgray") +
+  ggtitle("Dog: Simple Expo Smoothing") + 
+  xlab(label_xaxis) + ylab(label_yaxis) +
+  theme(legend.position = "bottom") +
+  guides(colour=guide_legend(title="")) +
+
+  # fitted values
+  autolayer(fitted(FC_SES),    series="Simple Expo Smoothing", lwd=0.5) +
+
+  # forecasted values
+  autolayer(FC_SES,            series="Simple Expo Smoothing", PI=FALSE, lwd=1, lty=1)
+```
+
+Forecasted Values
+
+Again, SES has flat forecast estimates 1 step out and then carries that single value forward through the entire forecast period.
+
+```{r}
+FC_SES$mean
+```
+
+```{r}
+summary(residuals(FC_SES))
+checkresiduals(FC_SES)
+```
+
+* Not much autocorrelation - lag 12 above significance line.  Ljung-Box test not significant (p-value 0.061).
+* Mean of residuals not zero (-6.019).  Histogram not normally distributed - peak on negative side.  So some bias in the model.
+
+```{r}
+accuracy(FC_SES, TS_TEST_SET)
+```
+
+Manual Calculate
+
+```{r}
+ACTUAL    <- as.numeric(TS_TEST_SET)
+PREDICTED <- as.numeric(FC_SES$mean)
+
+MODEL_ACCURACY <- data.frame(
+  Model    = "Simple Expo Smoothing",
+  RMSE     = Metrics::rmse(ACTUAL, PREDICTED),
+  MAE      = Metrics::mae( ACTUAL, PREDICTED),
+  MAPE     = Metrics::mape(ACTUAL, PREDICTED),
+  AdjRsqrd = NA
+)
+
+MODEL_COMPARISON <- rbind(MODEL_COMPARISON, MODEL_ACCURACY)
+MODEL_COMPARISON
+```
+
+SES slightly worse than SMA.  On average, forecast off by 60 dogs per month (or about 8%)
+
+## Holt Smoothing (Level & Trend)
+
+Smooth level and trends.  Again not the most appropriate given our data has some seasonality.
+
+```{r}
+FC_HOLT <- forecast::holt(TS_TRNG_SET, h=N_TEST_SET, 
+                          exponential = FALSE, 
+                          damped      = TRUE)
+
+FC_HOLT$model
+```
+
+```{r}
+autoplot(TIME_SERIES, color="darkgray") +
+  ggtitle("Dog: Holt Smoothing (Level & Trend)") + 
+  xlab(label_xaxis) + ylab(label_yaxis) +
+  theme(legend.position = "bottom") +
+  guides(colour=guide_legend(title="")) +
+
+  # fitted values  
+  autolayer(fitted(FC_HOLT),    series="Holt Smoothing", lwd=0.5) +
+
+  # forecasted values  
+  autolayer(FC_HOLT,            series="Holt Smoothing", PI=FALSE, lwd=1, lty=1)
+```
+
+Forecasted Values
+
+Slightly downward trend.
+
+```{r}
+FC_HOLT$mean
+```
+
+```{r}
+summary(residuals(FC_HOLT))
+checkresiduals(FC_HOLT)
+```
+
+* Some autocorrelation? - lag 12 above significance line.  Ljung-Box test is significant (p-value 0.025).  There is still some information in the time series the model is not extracting.
+* Mean of residuals not zero (-0.3449).  Histogram is more normally (than SES) but some peak on negative side, and small bump on right tail.  Maybe some slight bias in the model.
+
+```{r}
+accuracy(FC_HOLT, TS_TEST_SET)
+```
+
+Manually Calculate
+
+```{r}
+ACTUAL    <- as.numeric(TS_TEST_SET)
+PREDICTED <- as.numeric(FC_HOLT$mean)
+
+MODEL_ACCURACY <- data.frame(
+  Model    = "Holt Smoothing",
+  RMSE     = Metrics::rmse(ACTUAL, PREDICTED),
+  MAE      = Metrics::mae( ACTUAL, PREDICTED),
+  MAPE     = Metrics::mape(ACTUAL, PREDICTED),
+  AdjRsqrd = NA
+)
+
+MODEL_COMPARISON <- rbind(MODEL_COMPARISON, MODEL_ACCURACY)
+MODEL_COMPARISON
+```
+
+Holt Smoothing (Level & Trend) accuracy is worse the SES.  On average, model forecast off by 68 dogs per month (about 9%)
+
+## Holt Winters Smoothing (Level, Trend, Seasonality)
+
+```{r}
+FC_HW <- forecast::hw(TS_TRNG_SET, h=N_TEST_SET, 
+                      exponential = FALSE, damped = TRUE,
+                      seasonal    = "additive")
+#                      seasonal    = "multiplicative")
+
+FC_HW$model
+```
+
+```{r}
+autoplot(TIME_SERIES, color="darkgray", lty=2) +
+  ggtitle("Dog: Holt-Winters Smoothing (Level, Trend & Seasonality)") +
+  xlab(label_xaxis) + ylab(label_yaxis) +
+  theme(legend.position = "bottom") +
+  guides(colour=guide_legend(title="")) +
+
+  # fitted values
+  autolayer(fitted(FC_HW),      series="Holt-Winters Smoothing", lwd=0.5) +
+  
+  # forecasted values
+  autolayer(FC_HW,              series="Holt-Winters Smoothing", PI=FALSE, lwd=1, lty=1)
+```
+
+Looks like a better fit.
+
+```{r}
+summary(residuals(FC_HW))
+checkresiduals(FC_HW)
+```
+
+* Autocorrelation? - no lags above significance line.  Ljung-Box test is strongly significant (p-value 1.539e-05).  Indicating the residuals don't appear to be white noise - so perhaps some more information can be extracted to forecast the time-series.
+* Mean of residuals not zero (-2.330).  Histogram kind of normally distribute, but peak on negative side, and bump on right tail/outliers.  Maybe some bias in the model.
+
+```{r}
+accuracy(FC_HW, TS_TEST_SET)
+```
+
+Manually Calculate
+
+```{r}
+ACTUAL    <- as.numeric(TS_TEST_SET)
+PREDICTED <- as.numeric(FC_HW$mean)
+
+MODEL_ACCURACY <- data.frame(
+  Model    = "Holt-Winters Smoothing",
+  RMSE     = Metrics::rmse(ACTUAL, PREDICTED),
+  MAE      = Metrics::mae( ACTUAL, PREDICTED),
+  MAPE     = Metrics::mape(ACTUAL, PREDICTED),
+  AdjRsqrd = NA
+)
+
+MODEL_COMPARISON <- rbind(MODEL_COMPARISON, MODEL_ACCURACY)
+MODEL_COMPARISON
+```
+
+Much better results when using appropriate technique (factor in seasonality).  On average forecast off by 40 dogs per month (5%).
+
+## (stat) Holt Winters Smoothing (Level, Trend, Seasonality)
+
+Use `HoltWinters()` from the `stats` package rather than the equivalent function in the `forecast` package which uses `ets()` under the covers.
+
+Notes on difference between stats::HoltWinters() and forecast::hw()
+
+* https://stats.stackexchange.com/questions/312811/implementation-difference-between-holtwinters-and-hw-functions-of-rs-forecast-p
+* https://robjhyndman.com/hyndsight/estimation2/
+
+**Fit Model**
+```{r}
+MODEL_HWstat <- stats::HoltWinters(TS_TRNG_SET)
+MODEL_HWstat
+```
+
+```{r eval=FALSE, include=FALSE}
+# # autoplot(MODEL_HWstat$fitted, facets = FALSE)
+# 
+# autoplot(MODEL_HWstat$fitted[,1], series="Fitted", lwd=1.5) +
+#   autolayer(MODEL_HWstat$fitted[,2], series="Level",  lty=2, lwd=.5) +
+# #  autolayer(MODEL_HWstat$fitted[,3], series="Slope") +
+#   autolayer(MODEL_HWstat$fitted[,4], series="Season", lty=2, lwd=.5) +
+# 
+#   ggtitle("Holt-Winter Components") +
+#   xlab(label_xaxis) + ylab(label_yaxis) +
+#   theme(legend.position = "bottom") +
+#   guides(colour=guide_legend(title=""))
+# 
+# # ggsave(filename = "figures/02_MOD_Dog_HoltWinters_Components.png",
+# #         height=4, width=6, units="in")
+```
+
+Plot the resulting smoothed components
+
+```{r}
+autoplot(MODEL_HWstat$x, series="Data", color="darkgray") +
+  autolayer(MODEL_HWstat$fitted[,2], series="Level") +
+  autolayer(MODEL_HWstat$fitted[,3], series="Slope") +
+  autolayer(MODEL_HWstat$fitted[,4], series="Season") +
+
+  ggtitle("Holt-Winter Smoothing Components") +
+  xlab(label_xaxis) + ylab(label_yaxis) +
+  theme(legend.position = "bottom") +
+  guides(colour=guide_legend(title=""))
+
+# ggsave(filename = "figures/02_MOD_Dog_HoltWinters_Smoothing.png",
+#        height=4, width=6, units="in")
+```
+
+**Forecast/Predict Values for Test Set**
+
+```{r}
+FC_HWstat <- predict(MODEL_HWstat, n.ahead = N_TEST_SET)
+FC_HWstat
+```
+
+```{r}
+autoplot(TIME_SERIES, color="darkgray", lty=2) +
+  ggtitle("Dog: (stat) Holt-Winters Smoothing (Level, Trend & Seasonality)") +
+  xlab(label_xaxis) + ylab(label_yaxis) +
+  theme(legend.position = "bottom") +
+  guides(colour=guide_legend(title="")) +
+
+  # fitted values  
+  autolayer(fitted(MODEL_HWstat)[,c("xhat")], series="stat::Holt-Winters", lwd=0.5) +
+  
+  # forecasted values
+  autolayer(FC_HWstat,                        series="stat::Holt-Winters", lwd=1, lty=1) 
+```
+
+Plot comparison with Benchmark (Seasonal Naive)
+
+```{r}
+# create seasonal naive forecast for comparison
+FC_SEASONAL_NAIVE <- snaive(TS_TRNG_SET, h=N_TEST_SET)
+
+autoplot(TIME_SERIES, color="darkgray", lty=2) +
+  ggtitle("Dog: Holt-Winters vs. Seasonal Naive") +
+  xlab(label_xaxis) + ylab(label_yaxis) +
+  theme(legend.position = "bottom") +
+  guides(colour=guide_legend(title="")) +
+
+  # test set
+  autolayer(TS_TEST_SET, color="darkgray", lwd=.75, lty=1) +
+
+  # fitted values
+  autolayer(fitted(MODEL_HWstat)[,c("xhat")], series="Holt-Winters", lwd=0.75) +
+  
+  # forecasted values
+  autolayer(FC_HWstat,                        series="Holt-Winters", lwd=1, lty=1) +
+
+  # seasonal naive forecast
+  autolayer(FC_SEASONAL_NAIVE,         series="Seasonal Naive", PI=FALSE, lwd=.75, lty=1)
+
+# ggsave(filename = "figures/02_MOD_Dog_HoltWinters_vs_Naive.png",
+#           height=4, width=6, units="in")
+```
+
+```{r eval=FALSE, include=FALSE}
+# autoplot(TIME_SERIES, color="darkgray") +
+# #  ggtitle(label_title) +
+#   ggtitle("Dog: Forecast Comparison") +
+#   xlab(label_xaxis) + ylab(label_yaxis) +
+#   theme(legend.position = "bottom") +
+#   guides(colour=guide_legend(title="")) +
+# 
+# #  autolayer(fitted(MODEL_HWstat)[,c("xhat")], series="Holt-Winters", lwd=0.5) +
+#   autolayer(FC_HWstat,                        series="Holt-Winters", lwd=.75, lty=1) +
+# 
+# #  autolayer(fitted(MODEL_SEASONALITY), series="Regression on Seasonality", lwd=0.5) +
+#   autolayer(FC_SEASONALITY,            series="Regression on Seasonality", PI=FALSE, lwd=0.75, lty=1) +
+# 
+# #  autolayer(fitted(FC_SEASONAL_NAIVE), series="Seasonal Naive", lwd=0.5) +
+#   autolayer(FC_SEASONAL_NAIVE,         series="Seasonal Naive", PI=FALSE, lwd=0.5, lty=1)
+# 
+# # ggsave(filename = "figures/02_MOD_Dog_Compare.png",
+# #        height=4, width=6, units="in")
+```
+
+```{r}
+summary(residuals(MODEL_HWstat))
+checkresiduals(MODEL_HWstat)
+```
+
+* Does not look like any autocorrelation.
+* Looks a little bias - tends to under estimate.
+
+**Assess Accuracy**
+
+```{r}
+ACTUAL    <- as.numeric(TS_TEST_SET)
+PREDICTED <- as.numeric(FC_HWstat)
+
+MODEL_ACCURACY <- data.frame(
+  Model    = "stat::Holt-Winters",
+  RMSE     = Metrics::rmse(ACTUAL, PREDICTED),
+  MAE      = Metrics::mae( ACTUAL, PREDICTED),
+  MAPE     = Metrics::mape(ACTUAL, PREDICTED),
+  AdjRsqrd = NA
+)
+
+MODEL_COMPARISON <- rbind(MODEL_COMPARISON, MODEL_ACCURACY)
+MODEL_COMPARISON
+```
+
+Similar accuracy as forecast's implementation of Holt-Winters Smoothing
+
+```{r}
+#write_csv(MODEL_COMPARISON, "data/results_dog_smoothing.csv")
+```
+
+
+
