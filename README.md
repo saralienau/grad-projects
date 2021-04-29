@@ -1,6 +1,6 @@
 # Portfolio of Projects
 
-The following are some of the projects I completed during the [**data analytics** master's degree](https://www.rockhurst.edu/data-analytics) program in at [Rockhurst University](https://www.rockhurst.edu/) in Kansas City, Missouri.
+The following are some of the projects I completed during the [**data analytics** master's degree](https://www.rockhurst.edu/data-analytics) program at [Rockhurst University](https://www.rockhurst.edu/) in Kansas City, Missouri.
 
 The program emphasizes not only the need for technical proficiency but equally the ability to apply techniques to real business problems and effectively communicate advanced data topics to managers and colleagues with less technical expertise.
 
